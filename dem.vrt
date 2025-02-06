@@ -1,0 +1,39 @@
+<VRTDataset rasterXSize="125000" rasterYSize="125000" subClass="VRTWarpedDataset">
+  <GeoTransform>  1.2099975000000000e+06,  2.0000000000000001e-01,  0.0000000000000000e+00,  6.0900025000000000e+06,  0.0000000000000000e+00, -2.0000000000000001e-01</GeoTransform>
+  <VRTRasterBand dataType="Float32" band="1" subClass="VRTWarpedRasterBand">
+    <NoDataValue>0</NoDataValue>
+    <ColorInterp>Gray</ColorInterp>
+  </VRTRasterBand>
+  <BlockXSize>512</BlockXSize>
+  <BlockYSize>128</BlockYSize>
+  <GDALWarpOptions>
+    <WarpMemoryLimit>6.71089e+07</WarpMemoryLimit>
+    <ResampleAlg>CubicSpline</ResampleAlg>
+    <WorkingDataType>Float32</WorkingDataType>
+    <Option name="NUM_THREADS">ALL_CPUS</Option>
+    <Option name="INIT_DEST">NO_DATA</Option>
+    <Option name="ERROR_OUT_IF_EMPTY_SOURCE_WINDOW">FALSE</Option>
+    <SourceDataset relativeToVRT="1">temp_filled_dem.vrt</SourceDataset>
+    <Transformer>
+      <ApproxTransformer>
+        <MaxError>0.125</MaxError>
+        <BaseTransformer>
+          <GenImgProjTransformer>
+            <SrcGeoTransform>1209997.5,5,0,6090002.5,0,-5</SrcGeoTransform>
+            <SrcInvGeoTransform>-241999.5,0.20000000000000001,0,1218000.5,0,-0.20000000000000001</SrcInvGeoTransform>
+            <DstGeoTransform>1209997.5,0.20000000000000001,0,6090002.5,0,-0.20000000000000001</DstGeoTransform>
+            <DstInvGeoTransform>-6049987.5,5,0,30450012.5,0,-5</DstInvGeoTransform>
+          </GenImgProjTransformer>
+        </BaseTransformer>
+      </ApproxTransformer>
+    </Transformer>
+    <BandList>
+      <BandMapping src="1" dst="1">
+        <SrcNoDataReal>-99999</SrcNoDataReal>
+        <SrcNoDataImag>0</SrcNoDataImag>
+        <DstNoDataReal>0</DstNoDataReal>
+        <DstNoDataImag>0</DstNoDataImag>
+      </BandMapping>
+    </BandList>
+  </GDALWarpOptions>
+</VRTDataset>
