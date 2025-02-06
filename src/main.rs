@@ -1,94 +1,101 @@
+use std::fs;
+use std::path::Path;
 use std::process::Command;
 
-fn build_ortho_vrt() {
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg("gdalbuildvrt -resolution highest mosaic.vrt data/jp2/*.jp2")
-        .output()
-        .expect("Failed to execute command");
+fn ensure_directories() -> std::io::Result<()> {
+    fs::create_dir_all("out/tmp")?;
+    Ok(())
+}
 
-    if !output.status.success() {
-        eprintln!("Command failed with status: {}", output.status);
-        eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-    } else {
-        println!("Orthophoto VRT created successfully");
+fn cleanup_vrts() -> std::io::Result<()> {
+    let tmp_dir = Path::new("out/tmp");
+    if tmp_dir.exists() {
+        for entry in fs::read_dir(tmp_dir)? {
+            let entry = entry?;
+            if entry.path().extension().unwrap_or_default() == "vrt" {
+                fs::remove_file(entry.path())?;
+            }
+        }
     }
+    Ok(())
+}
+
+fn build_ortho_vrt() -> bool {
+    Command::new("sh")
+        .arg("-c")
+        .arg("gdalbuildvrt -resolution highest out/tmp/mosaic.vrt data/jp2/*.jp2")
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
 }
 
 fn build_dem_vrt() -> bool {
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg("gdalbuildvrt -resolution highest temp_dem.vrt data/asc/*.asc")
-        .output()
-        .expect("Failed to execute command");
-
-    if !output.status.success() {
-        eprintln!("Initial DEM VRT creation failed: {}", output.status);
-        eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-        return false;
-    }
-    println!("Initial DEM VRT created");
-
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg("gdal_fillnodata -md 200 -si 1 temp_dem.vrt temp_filled_dem.vrt")
-        .output()
-        .expect("Failed to execute command");
-
-    if !output.status.success() {
-        eprintln!("DEM hole filling failed: {}", output.status);
-        eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-        let _ = std::fs::remove_file("temp_dem.vrt");
-        return false;
-    }
-    println!("Holes filled in DEM");
-
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg("gdalwarp -tr 0.2 0.2 -r cubicspline -dstnodata 0 -wo NUM_THREADS=ALL_CPUS temp_filled_dem.vrt dem.vrt")
-        .output()
-        .expect("Failed to execute command");
-
-    if output.status.success() {
-        println!("DEM VRT resampled successfully");
-        true
-    } else {
-        eprintln!("DEM resampling failed: {}", output.status);
-        eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-        false
-    }
-}
-
-fn resize_and_convert() {
     let commands = [
-        "gdal_translate -of GTiff mosaic.vrt orthophoto.tiff",
-        "gdal_translate -of GTiff -a_nodata 0 dem.vrt dem.tiff",
+        "gdalbuildvrt -resolution highest out/tmp/temp_dem.vrt data/asc/*.asc",
+        "gdal_fillnodata -md 200 -si 1 out/tmp/temp_dem.vrt out/tmp/temp_filled_dem.vrt",
+        "gdalwarp -tr 0.2 0.2 -r cubicspline -dstnodata 0 -wo NUM_THREADS=ALL_CPUS out/tmp/temp_filled_dem.vrt out/tmp/dem.vrt"
     ];
 
-    for command in commands.iter() {
-        let output = Command::new("sh")
+    for cmd in &commands {
+        let success = Command::new("sh")
             .arg("-c")
-            .arg(command)
-            .output()
-            .expect("Failed to execute command");
+            .arg(cmd)
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
 
-        if !output.status.success() {
-            eprintln!(
-                "Command '{}' failed with status: {}",
-                command, output.status
-            );
-            eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-        } else {
-            println!("Command '{}' executed successfully", command);
+        if !success {
+            eprintln!("Command failed: {}", cmd);
+            return false;
         }
     }
+    true
+}
+
+fn resize_and_convert() -> bool {
+    let commands = [
+        "gdal_translate -of GTiff out/tmp/mosaic.vrt out/orthophoto.tiff",
+        "gdal_translate -of GTiff -a_nodata 0 out/tmp/dem.vrt out/dem.tiff",
+    ];
+
+    for cmd in &commands {
+        let success = Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+
+        if !success {
+            eprintln!("Command failed: {}", cmd);
+            return false;
+        }
+    }
+    true
 }
 
 fn main() {
-    build_ortho_vrt();
+    if let Err(e) = ensure_directories() {
+        eprintln!("Failed to create directories: {}", e);
+        return;
+    }
+
+    if let Err(e) = cleanup_vrts() {
+        eprintln!("Failed to cleanup VRTs: {}", e);
+        return;
+    }
+
+    if !build_ortho_vrt() {
+        eprintln!("Failed to build orthophoto VRT");
+        return;
+    }
+
     if !build_dem_vrt() {
         eprintln!("Failed to process DEM VRT");
         return;
     }
-    resize_and_convert();
+
+    if !resize_and_convert() {
+        eprintln!("Failed to create final TIFFs");
+    }
 }

@@ -2,3 +2,4 @@
 /terrain-3d/node_modules
 /data
 *.tiff
+/out
